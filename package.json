@@ -1,0 +1,17 @@
+{
+  "name": "boksil-coin",
+  "version": "1.0.0",
+  "description": "복실코인(BXC) - 온라인 경제 게임",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "keywords": ["game", "economy", "boksil", "bxc"],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1",
+    "uuid": "^11.0.3"
+  }
+}

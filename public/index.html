@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>복실코인 BXC 거래소</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- 로그인 화면 -->
+  <div id="login-screen" class="screen active">
+    <div class="login-container">
+      <div class="logo">
+        <span class="logo-emoji">🐱</span>
+        <h1>복실코인</h1>
+        <p class="logo-sub">BXC · 온라인 경제 게임</p>
+      </div>
+      <div class="login-form">
+        <input type="text" id="nickname-input" placeholder="닉네임 (2~12자)" maxlength="12" autocomplete="username">
+        <input type="password" id="password-input" placeholder="비밀번호 (4~32자)" maxlength="32" autocomplete="current-password">
+        <button id="login-btn" class="btn btn-primary">게임 시작</button>
+        <p class="login-hint">신규 닉네임은 자동 가입 · 시작 자금 <strong>₩10,000,000</strong></p>
+      </div>
+      <p id="login-error" class="error-msg hidden"></p>
+    </div>
+  </div>
+
+  <!-- 메인 게임 화면 -->
+  <div id="game-screen" class="screen">
+    <header class="header">
+      <div class="header-row">
+        <div class="header-left">
+          <span class="header-logo">🐱 BXC</span>
+          <span id="player-nickname" class="player-name"></span>
+        </div>
+        <button id="logout-btn" class="btn btn-logout" type="button" title="로그아웃">로그아웃</button>
+      </div>
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-tab="trade">거래</button>
+        <button class="nav-tab" data-tab="shop">상점</button>
+        <button class="nav-tab" data-tab="collection">컬렉션</button>
+        <button class="nav-tab" data-tab="ranking">랭킹</button>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <!-- 거래 탭 -->
+      <section id="tab-trade" class="tab-panel active">
+        <div class="price-card">
+          <div class="price-header">
+            <span class="price-label">BXC / KRW</span>
+            <span id="price-change" class="price-change">+0.00%</span>
+          </div>
+          <div id="current-price" class="current-price">₩1,000</div>
+          <div id="current-price-sub" class="money-sub"></div>
+          <div class="chart-container">
+            <canvas id="price-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="portfolio-card">
+          <div class="portfolio-grid">
+            <div class="portfolio-item">
+              <span class="portfolio-label">보유 현금</span>
+              <span id="user-cash" class="portfolio-value">₩0</span>
+              <span id="user-cash-sub" class="money-sub"></span>
+            </div>
+            <div class="portfolio-item">
+              <span class="portfolio-label">보유 수량</span>
+              <span id="user-bxc" class="portfolio-value">0 BXC</span>
+              <span id="user-bxc-sub" class="money-sub"></span>
+            </div>
+            <div class="portfolio-item">
+              <span class="portfolio-label">BXC 평가액</span>
+              <span id="user-bxc-value" class="portfolio-value">₩0</span>
+              <span id="user-bxc-value-sub" class="money-sub"></span>
+              <span id="user-bxc-profit" class="portfolio-profit"></span>
+            </div>
+            <div class="portfolio-item">
+              <span class="portfolio-label">총 자산</span>
+              <span id="user-total" class="portfolio-value highlight">₩0</span>
+              <span id="user-total-sub" class="money-sub"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="trade-card">
+          <div class="trade-section">
+            <h3 class="trade-title buy-title">매수</h3>
+            <div class="trade-buttons">
+              <button class="btn btn-buy" data-type="buy" data-percent="10">10%</button>
+              <button class="btn btn-buy" data-type="buy" data-percent="25">25%</button>
+              <button class="btn btn-buy" data-type="buy" data-percent="50">절반</button>
+              <button class="btn btn-buy" data-type="buy" data-percent="100">전량</button>
+            </div>
+          </div>
+          <div class="trade-divider"></div>
+          <div class="trade-section">
+            <h3 class="trade-title sell-title">매도</h3>
+            <div class="trade-buttons">
+              <button class="btn btn-sell" data-type="sell" data-percent="10">10%</button>
+              <button class="btn btn-sell" data-type="sell" data-percent="25">25%</button>
+              <button class="btn btn-sell" data-type="sell" data-percent="50">절반</button>
+              <button class="btn btn-sell" data-type="sell" data-percent="100">전량</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 상점 탭 -->
+      <section id="tab-shop" class="tab-panel">
+        <h2 class="section-title">복실이 상점</h2>
+        <p class="section-desc">현금으로 복실이 아이템을 수집하세요</p>
+        <div id="shop-grid" class="shop-grid"></div>
+      </section>
+
+      <!-- 컬렉션 탭 -->
+      <section id="tab-collection" class="tab-panel">
+        <div class="collection-header">
+          <h2 class="section-title">내 컬렉션</h2>
+          <div class="collection-progress">
+            <span id="collection-count">0 / 20</span>
+            <div class="progress-bar">
+              <div id="collection-bar" class="progress-fill" style="width: 0%"></div>
+            </div>
+            <span id="collection-pct">0%</span>
+          </div>
+        </div>
+        <div id="collection-grid" class="collection-grid"></div>
+      </section>
+
+      <!-- 랭킹 탭 -->
+      <section id="tab-ranking" class="tab-panel">
+        <div class="ranking-header">
+          <h2 class="section-title">랭킹</h2>
+          <div class="ranking-tabs">
+            <button class="ranking-tab active" data-ranking="cash">현금</button>
+            <button class="ranking-tab" data-ranking="collection">컬렉션</button>
+          </div>
+        </div>
+        <div id="ranking-cash-panel" class="ranking-panel active">
+          <p class="section-desc">보유 현금 기준 TOP 20</p>
+          <div id="ranking-cash-list" class="ranking-list"></div>
+        </div>
+        <div id="ranking-collection-panel" class="ranking-panel">
+          <p class="section-desc">컬렉션 완성도 기준 TOP 20</p>
+          <div id="ranking-collection-list" class="ranking-list"></div>
+        </div>
+      </section>
+    </main>
+
+    <div id="event-banner" class="event-banner">
+      <span id="event-text"></span>
+    </div>
+  </div>
+
+  <!-- 토스트 알림 -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- 복실이 상세 뷰어 -->
+  <div id="boksil-viewer" class="boksil-viewer hidden" role="dialog" aria-modal="true" aria-labelledby="boksil-viewer-title">
+    <div class="boksil-viewer-backdrop"></div>
+    <div class="boksil-viewer-panel">
+      <button id="boksil-viewer-close" class="boksil-viewer-close" type="button" aria-label="닫기">×</button>
+      <div class="boksil-viewer-image-wrap">
+        <img id="boksil-viewer-img" class="boksil-viewer-img" alt="">
+      </div>
+      <div class="boksil-viewer-info">
+        <h3 id="boksil-viewer-title" class="boksil-viewer-title"></h3>
+        <p id="boksil-viewer-desc" class="boksil-viewer-desc"></p>
+        <a id="boksil-viewer-download" class="btn btn-primary boksil-viewer-download" download>다운로드</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/chart.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
