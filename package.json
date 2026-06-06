@@ -7,10 +7,16 @@
     "start": "node server/index.js",
     "dev": "node --watch server/index.js"
   },
-  "keywords": ["game", "economy", "boksil", "bxc"],
+  "keywords": [
+    "game",
+    "economy",
+    "boksil",
+    "bxc"
+  ],
   "license": "MIT",
   "dependencies": {
     "express": "^4.21.2",
+    "pg": "^8.21.0",
     "socket.io": "^4.8.1",
     "uuid": "^11.0.3"
   }
