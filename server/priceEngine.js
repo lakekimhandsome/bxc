@@ -61,13 +61,16 @@ function pickEvent() {
     roll -= event.weight;
     if (roll <= 0) return event;
   }
+
   return EVENTS[0];
 }
 
 function pickRareEvent() {
   const roll = Math.random();
+
   if (roll < RARE_EVENT_CHANCE) return RARE_EVENTS.pump100;
   if (roll < RARE_EVENT_CHANCE * 2) return RARE_EVENTS.rugpull;
+
   return null;
 }
 
@@ -75,15 +78,15 @@ function clampPrice(price) {
   return Math.max(MIN_PRICE, Math.round(price));
 }
 
-function tickPrice() {
-  const market = getMarketState();
-  const previousPrice = market.current_price;
+async function tickPrice() {
+  const market = await getMarketState();
+  const previousPrice = Number(market.current_price);
   const event = pickRareEvent() || pickEvent();
   const rawPrice = event.apply(previousPrice);
   const newPrice = clampPrice(rawPrice);
   const message = event.message();
 
-  const result = updateMarketState(newPrice, previousPrice, event.type, message);
+  const result = await updateMarketState(newPrice, previousPrice, event.type, message);
 
   return {
     price: newPrice,
@@ -95,23 +98,30 @@ function tickPrice() {
 }
 
 function startPriceEngine(io) {
-  const interval = setInterval(() => {
-    const update = tickPrice();
-    io.emit('price:update', update);
+  const interval = setInterval(async () => {
+    try {
+      const update = await tickPrice();
+      io.emit('price:update', update);
+    } catch (err) {
+      console.error('가격 엔진 오류:', err.message);
+    }
   }, TICK_INTERVAL_MS);
 
   return () => clearInterval(interval);
 }
 
-function getCurrentPriceInfo() {
-  const market = getMarketState();
-  const changePct = market.previous_price > 0
-    ? ((market.current_price - market.previous_price) / market.previous_price) * 100
+async function getCurrentPriceInfo() {
+  const market = await getMarketState();
+  const currentPrice = Number(market.current_price);
+  const previousPrice = Number(market.previous_price);
+
+  const changePct = previousPrice > 0
+    ? ((currentPrice - previousPrice) / previousPrice) * 100
     : 0;
 
   return {
-    price: market.current_price,
-    previousPrice: market.previous_price,
+    price: currentPrice,
+    previousPrice,
     changePct,
     eventType: market.last_event,
     eventMessage: market.last_event_message,

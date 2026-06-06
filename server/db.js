@@ -1,10 +1,11 @@
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require('pg');
 const { v4: uuidv4 } = require('uuid');
 const { validatePassword, hashPassword, verifyPassword } = require('./auth');
 
-const DATA_PATH = path.join(__dirname, '..', 'data', 'game.json');
-
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
 const SHOP_ITEMS = [
   {
     id: 'default',
@@ -185,154 +186,54 @@ function getBoksilImageUrl(itemId) {
   return `${BOKSIL_IMAGE_DIR}/${itemId}.png`;
 }
 
-function parsePrice(price) {
-  if (typeof price === 'bigint') return price;
-  if (typeof price === 'string') return BigInt(price);
-  return BigInt(Math.floor(price));
-}
-
-function canAfford(cash, price) {
-  return BigInt(Math.floor(cash)) >= parsePrice(price);
-}
-
 const STARTING_CASH = 10000000;
 const INITIAL_PRICE = 1000;
 const MIN_NICKNAME_LENGTH = 2;
 const MAX_NICKNAME_LENGTH = 12;
 
-let data = null;
-let saveTimer = null;
-
-function defaultData() {
-  const initialPrice = INITIAL_PRICE;
-  return {
-    users: {},
-    userItems: {},
-    market: {
-      currentPrice: initialPrice,
-      previousPrice: initialPrice,
-      lastEvent: 'normal',
-      lastEventMessage: '복실코인 상장!',
-      updatedAt: new Date().toISOString(),
-    },
-    priceHistory: [
-      { price: initialPrice, changePct: 0, eventType: 'normal', eventMessage: '복실코인 상장!', recordedAt: new Date().toISOString() },
-    ],
-  };
-}
-
-function loadData() {
-  try {
-    if (fs.existsSync(DATA_PATH)) {
-      const raw = fs.readFileSync(DATA_PATH, 'utf-8');
-      data = JSON.parse(raw);
-    } else {
-      data = defaultData();
-      saveData(true);
-    }
-  } catch {
-    data = defaultData();
-    saveData(true);
-  }
-}
-
-function saveData(immediate = false) {
-  if (immediate) {
-    fs.mkdirSync(path.dirname(DATA_PATH), { recursive: true });
-    fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2));
-    return;
-  }
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    fs.mkdirSync(path.dirname(DATA_PATH), { recursive: true });
-    fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2));
-  }, 100);
-}
-
-function initDb() {
-  loadData();
-}
-
 function validateNickname(nickname) {
   const trimmed = nickname.trim();
+
   if (trimmed.length < MIN_NICKNAME_LENGTH || trimmed.length > MAX_NICKNAME_LENGTH) {
     throw new Error(`닉네임은 ${MIN_NICKNAME_LENGTH}~${MAX_NICKNAME_LENGTH}자여야 합니다.`);
   }
+
   if (!/^[\w가-힣]+$/.test(trimmed)) {
     throw new Error('닉네임은 한글, 영문, 숫자, 밑줄만 사용할 수 있습니다.');
   }
+
   return trimmed;
 }
 
-function createUser(nickname, password) {
-  const trimmed = validateNickname(nickname);
-  validatePassword(password);
+async function initDb() {
+  await pool.query(
+    `insert into market
+    (id, current_price, previous_price, last_event, last_event_message)
+    values (1, $1, $1, 'normal', '복실코인 상장!')
+    on conflict (id) do nothing`,
+    [INITIAL_PRICE]
+  );
 
-  const existing = Object.values(data.users).find((u) => u.nickname === trimmed);
-  if (existing) {
-    throw new Error('이미 사용 중인 닉네임입니다.');
-  }
-
-  const id = uuidv4();
-  const now = new Date().toISOString();
-  data.users[id] = {
-    id,
-    nickname: trimmed,
-    passwordHash: hashPassword(password),
-    cash: STARTING_CASH,
-    bxc: 0,
-    bxcCost: 0,
-    createdAt: now,
-    lastSeen: now,
-  };
-  data.userItems[id] = ['default'];
-  saveData();
-  return getUserById(id);
+  await pool.query(
+    `insert into price_history
+    (price, change_pct, event_type, event_message)
+    select $1, 0, 'normal', '복실코인 상장!'
+    where not exists (select 1 from price_history)`,
+    [INITIAL_PRICE]
+  );
 }
 
-function ensureDefaultItem(userId) {
-  if (!data.userItems[userId]) {
-    data.userItems[userId] = ['default'];
-    saveData();
-    return;
-  }
-  if (!data.userItems[userId].includes('default')) {
-    data.userItems[userId].unshift('default');
-    saveData();
-  }
-}
+function normalizeUser(row, items = []) {
+  if (!row) return null;
 
-function authenticateUser(nickname, password) {
-  const trimmed = validateNickname(nickname);
-  validatePassword(password);
-
-  const existing = Object.values(data.users).find((u) => u.nickname === trimmed);
-
-  if (!existing) {
-    return createUser(trimmed, password);
-  }
-
-  if (!existing.passwordHash) {
-    existing.passwordHash = hashPassword(password);
-    saveData();
-    return getUserById(existing.id);
-  }
-
-  if (!verifyPassword(password, existing.passwordHash)) {
-    throw new Error('비밀번호가 일치하지 않습니다.');
-  }
-
-  return getUserById(existing.id);
-}
-
-function getUserById(id) {
-  const user = data.users[id];
-  if (!user) return null;
-  ensureDefaultItem(id);
-  const { passwordHash, ...safeUser } = user;
-  const items = data.userItems[id] || [];
   return {
-    ...safeUser,
+    id: row.id,
+    nickname: row.nickname,
+    cash: Number(row.cash),
+    bxc: Number(row.bxc),
+    bxcCost: Number(row.bxc_cost),
+    createdAt: row.created_at,
+    lastSeen: row.last_seen,
     items,
     collectionCount: items.length,
     collectionTotal: TOTAL_SHOP_ITEMS,
@@ -340,158 +241,367 @@ function getUserById(id) {
   };
 }
 
-function getUserByNickname(nickname) {
-  const user = Object.values(data.users).find((u) => u.nickname === nickname.trim());
+async function ensureDefaultItem(userId) {
+  await pool.query(
+    `insert into user_items (user_id, item_id)
+    values ($1, 'default')
+    on conflict do nothing`,
+    [userId]
+  );
+}
+
+async function getUserItems(userId) {
+  await ensureDefaultItem(userId);
+
+  const result = await pool.query(
+    `select item_id from user_items where user_id = $1 order by item_id`,
+    [userId]
+  );
+
+  return result.rows.map((row) => row.item_id);
+}
+
+async function createUser(nickname, password) {
+  const trimmed = validateNickname(nickname);
+  validatePassword(password);
+
+  const existing = await pool.query(
+    `select id from users where nickname = $1`,
+    [trimmed]
+  );
+
+  if (existing.rows.length > 0) {
+    throw new Error('이미 사용 중인 닉네임입니다.');
+  }
+
+  const id = uuidv4();
+  const passwordHash = hashPassword(password);
+
+  await pool.query(
+    `insert into users
+    (id, nickname, password_hash, cash, bxc, bxc_cost)
+    values ($1, $2, $3, $4, 0, 0)`,
+    [id, trimmed, passwordHash, STARTING_CASH]
+  );
+
+  await ensureDefaultItem(id);
+
+  return getUserById(id);
+}
+
+async function authenticateUser(nickname, password) {
+  const trimmed = validateNickname(nickname);
+  validatePassword(password);
+
+  const result = await pool.query(
+    `select * from users where nickname = $1`,
+    [trimmed]
+  );
+
+  const existing = result.rows[0];
+
+  if (!existing) {
+    return createUser(trimmed, password);
+  }
+
+  if (!verifyPassword(password, existing.password_hash)) {
+    throw new Error('비밀번호가 일치하지 않습니다.');
+  }
+
+  return getUserById(existing.id);
+}
+
+async function getUserById(id) {
+  const result = await pool.query(
+    `select * from users where id = $1`,
+    [id]
+  );
+
+  const user = result.rows[0];
   if (!user) return null;
+
+  const items = await getUserItems(id);
+  return normalizeUser(user, items);
+}
+
+async function getUserByNickname(nickname) {
+  const trimmed = nickname.trim();
+
+  const result = await pool.query(
+    `select id from users where nickname = $1`,
+    [trimmed]
+  );
+
+  const user = result.rows[0];
+  if (!user) return null;
+
   return getUserById(user.id);
 }
 
-function updateLastSeen(userId) {
-  if (data.users[userId]) {
-    data.users[userId].lastSeen = new Date().toISOString();
-    saveData();
-  }
+async function updateLastSeen(userId) {
+  await pool.query(
+    `update users set last_seen = now() where id = $1`,
+    [userId]
+  );
 }
 
-function getCashRankings(limit = 20) {
-  return Object.values(data.users)
-    .sort((a, b) => b.cash - a.cash)
-    .slice(0, limit)
-    .map(({ nickname, cash, bxc }) => ({ nickname, cash, bxc }));
-}
+async function getCashRankings(limit = 20) {
+  const result = await pool.query(
+    `select nickname, cash, bxc
+    from users
+    order by cash desc
+    limit $1`,
+    [limit]
+  );
 
-function getCollectionRankings(limit = 20) {
-  return Object.values(data.users)
-    .map((user) => {
-      ensureDefaultItem(user.id);
-      const count = (data.userItems[user.id] || []).length;
-      return {
-        nickname: user.nickname,
-        collectionCount: count,
-        collectionTotal: TOTAL_SHOP_ITEMS,
-        collectionPct: Math.round((count / TOTAL_SHOP_ITEMS) * 100),
-      };
-    })
-    .sort((a, b) => {
-      if (b.collectionPct !== a.collectionPct) return b.collectionPct - a.collectionPct;
-      if (b.collectionCount !== a.collectionCount) return b.collectionCount - a.collectionCount;
-      return a.nickname.localeCompare(b.nickname, 'ko');
-    })
-    .slice(0, limit);
-}
-
-function getRankings(limit = 20) {
-  return {
-    cash: getCashRankings(limit),
-    collection: getCollectionRankings(limit),
-  };
-}
-
-function getMarketState() {
-  return {
-    current_price: data.market.currentPrice,
-    previous_price: data.market.previousPrice,
-    last_event: data.market.lastEvent,
-    last_event_message: data.market.lastEventMessage,
-    updated_at: data.market.updatedAt,
-  };
-}
-
-function updateMarketState(price, previousPrice, eventType, eventMessage) {
-  const changePct = previousPrice > 0 ? ((price - previousPrice) / previousPrice) * 100 : 0;
-
-  data.market = {
-    currentPrice: price,
-    previousPrice,
-    lastEvent: eventType,
-    lastEventMessage: eventMessage,
-    updatedAt: new Date().toISOString(),
-  };
-
-  data.priceHistory.push({
-    price,
-    changePct,
-    eventType,
-    eventMessage,
-    recordedAt: new Date().toISOString(),
-  });
-
-  if (data.priceHistory.length > 500) {
-    data.priceHistory = data.priceHistory.slice(-500);
-  }
-
-  saveData();
-  return { price, changePct, eventType, eventMessage };
-}
-
-function getPriceHistory(limit = 100) {
-  return data.priceHistory.slice(-limit).map((h) => ({
-    price: h.price,
-    change_pct: h.changePct,
-    event_type: h.eventType,
-    event_message: h.eventMessage,
-    recorded_at: h.recordedAt,
+  return result.rows.map((row) => ({
+    nickname: row.nickname,
+    cash: Number(row.cash),
+    bxc: Number(row.bxc),
   }));
 }
 
-function executeTrade(userId, type, percent) {
-  const user = data.users[userId];
-  if (!user) throw new Error('사용자를 찾을 수 없습니다.');
+async function getCollectionRankings(limit = 20) {
+  const result = await pool.query(
+    `select
+      u.nickname,
+      count(ui.item_id)::int as collection_count
+    from users u
+    left join user_items ui on u.id = ui.user_id
+    group by u.id, u.nickname
+    order by collection_count desc, u.nickname asc
+    limit $1`,
+    [limit]
+  );
 
-  const price = data.market.currentPrice;
-  const pct = percent / 100;
+  return result.rows.map((row) => {
+    const count = Number(row.collection_count);
 
-  if (type === 'buy') {
-    const spendAmount = user.cash * pct;
-    if (spendAmount <= 0) {
-      throw new Error('매수할 현금이 없습니다.');
-    }
-    const bxcAmount = spendAmount / price;
-    user.cash -= spendAmount;
-    user.bxc += bxcAmount;
-    user.bxcCost = (user.bxcCost || 0) + spendAmount;
-    saveData();
-    return { type: 'buy', spent: spendAmount, bxcGained: bxcAmount, price };
-  }
-
-  if (type === 'sell') {
-    const sellBxc = user.bxc * pct;
-    if (sellBxc <= 0) {
-      throw new Error('매도할 BXC가 없습니다.');
-    }
-    const costBasis = user.bxcCost || 0;
-    const costSold = user.bxc > 0 ? costBasis * (sellBxc / user.bxc) : 0;
-    const gainAmount = sellBxc * price;
-    user.cash += gainAmount;
-    user.bxc -= sellBxc;
-    user.bxcCost = costBasis - costSold;
-    saveData();
-    return { type: 'sell', bxcSold: sellBxc, gained: gainAmount, price };
-  }
-
-  throw new Error('잘못된 거래 유형입니다.');
+    return {
+      nickname: row.nickname,
+      collectionCount: count,
+      collectionTotal: TOTAL_SHOP_ITEMS,
+      collectionPct: Math.round((count / TOTAL_SHOP_ITEMS) * 100),
+    };
+  });
 }
 
-function purchaseItem(userId, itemId) {
+async function getRankings(limit = 20) {
+  return {
+    cash: await getCashRankings(limit),
+    collection: await getCollectionRankings(limit),
+  };
+}
+
+async function getMarketState() {
+  const result = await pool.query(
+    `select * from market where id = 1`
+  );
+
+  const market = result.rows[0];
+
+  return {
+    current_price: Number(market.current_price),
+    previous_price: Number(market.previous_price),
+    last_event: market.last_event,
+    last_event_message: market.last_event_message,
+    updated_at: market.updated_at,
+  };
+}
+
+async function updateMarketState(price, previousPrice, eventType, eventMessage) {
+  const changePct = previousPrice > 0
+    ? ((price - previousPrice) / previousPrice) * 100
+    : 0;
+
+  await pool.query(
+    `update market
+    set current_price = $1,
+        previous_price = $2,
+        last_event = $3,
+        last_event_message = $4,
+        updated_at = now()
+    where id = 1`,
+    [price, previousPrice, eventType, eventMessage]
+  );
+
+  await pool.query(
+    `insert into price_history
+    (price, change_pct, event_type, event_message)
+    values ($1, $2, $3, $4)`,
+    [price, changePct, eventType, eventMessage]
+  );
+
+  await pool.query(
+    `delete from price_history
+    where id not in (
+      select id from price_history
+      order by recorded_at desc
+      limit 500
+    )`
+  );
+
+  return { price, changePct, eventType, eventMessage };
+}
+
+async function getPriceHistory(limit = 100) {
+  const result = await pool.query(
+    `select price, change_pct, event_type, event_message, recorded_at
+    from price_history
+    order by recorded_at desc
+    limit $1`,
+    [limit]
+  );
+
+  return result.rows.reverse().map((row) => ({
+    price: Number(row.price),
+    change_pct: Number(row.change_pct),
+    event_type: row.event_type,
+    event_message: row.event_message,
+    recorded_at: row.recorded_at,
+  }));
+}
+
+async function executeTrade(userId, type, percent) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('begin');
+
+    const userResult = await client.query(
+      `select * from users where id = $1 for update`,
+      [userId]
+    );
+
+    const user = userResult.rows[0];
+    if (!user) throw new Error('사용자를 찾을 수 없습니다.');
+
+    const marketResult = await client.query(
+      `select current_price from market where id = 1`
+    );
+
+    const price = Number(marketResult.rows[0].current_price);
+    const cash = Number(user.cash);
+    const bxc = Number(user.bxc);
+    const bxcCost = Number(user.bxc_cost);
+    const pct = percent / 100;
+
+    if (type === 'buy') {
+      const spendAmount = cash * pct;
+
+      if (spendAmount <= 0) {
+        throw new Error('매수할 현금이 없습니다.');
+      }
+
+      const bxcAmount = spendAmount / price;
+
+      await client.query(
+        `update users
+        set cash = cash - $1,
+            bxc = bxc + $2,
+            bxc_cost = bxc_cost + $1
+        where id = $3`,
+        [spendAmount, bxcAmount, userId]
+      );
+
+      await client.query('commit');
+      return { type: 'buy', spent: spendAmount, bxcGained: bxcAmount, price };
+    }
+
+    if (type === 'sell') {
+      const sellBxc = bxc * pct;
+
+      if (sellBxc <= 0) {
+        throw new Error('매도할 BXC가 없습니다.');
+      }
+
+      const costSold = bxc > 0 ? bxcCost * (sellBxc / bxc) : 0;
+      const gainAmount = sellBxc * price;
+
+      await client.query(
+        `update users
+        set cash = cash + $1,
+            bxc = bxc - $2,
+            bxc_cost = bxc_cost - $3
+        where id = $4`,
+        [gainAmount, sellBxc, costSold, userId]
+      );
+
+      await client.query('commit');
+      return { type: 'sell', bxcSold: sellBxc, gained: gainAmount, price };
+    }
+
+    throw new Error('잘못된 거래 유형입니다.');
+  } catch (err) {
+    await client.query('rollback');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function purchaseItem(userId, itemId) {
   const item = SHOP_ITEMS.find((i) => i.id === itemId);
   if (!item) throw new Error('존재하지 않는 아이템입니다.');
-  if (item.starter || parsePrice(item.price) === 0n) {
+
+  const itemPrice = item.price.toString();
+
+  if (item.starter || itemPrice === '0') {
     throw new Error('구매할 수 없는 아이템입니다.');
   }
 
-  const items = data.userItems[userId] || [];
-  if (items.includes(itemId)) throw new Error('이미 보유한 아이템입니다.');
+  const client = await pool.connect();
 
-  const user = data.users[userId];
-  if (!user) throw new Error('사용자를 찾을 수 없습니다.');
-  if (!canAfford(user.cash, item.price)) throw new Error('현금이 부족합니다.');
+  try {
+    await client.query('begin');
 
-  const price = parsePrice(item.price);
-  const cash = BigInt(Math.floor(user.cash));
-  user.cash = Number(cash - price);
-  data.userItems[userId].push(itemId);
-  saveData();
-  return item;
+    const owned = await client.query(
+      `select 1 from user_items where user_id = $1 and item_id = $2`,
+      [userId, itemId]
+    );
+
+    if (owned.rows.length > 0) {
+      throw new Error('이미 보유한 아이템입니다.');
+    }
+
+    const userResult = await client.query(
+      `select cash from users where id = $1 for update`,
+      [userId]
+    );
+
+    const user = userResult.rows[0];
+    if (!user) throw new Error('사용자를 찾을 수 없습니다.');
+
+    const affordResult = await client.query(
+      `select ($1::numeric >= $2::numeric) as can_afford`,
+      [user.cash, itemPrice]
+    );
+
+    if (!affordResult.rows[0].can_afford) {
+      throw new Error('현금이 부족합니다.');
+    }
+
+    await client.query(
+      `update users
+      set cash = cash - $1::numeric
+      where id = $2`,
+      [itemPrice, userId]
+    );
+
+    await client.query(
+      `insert into user_items (user_id, item_id)
+      values ($1, $2)`,
+      [userId, itemId]
+    );
+
+    await client.query('commit');
+    return item;
+  } catch (err) {
+    await client.query('rollback');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 function getShopItems() {
