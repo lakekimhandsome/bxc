@@ -93,6 +93,29 @@ function formatBXCPlain(amount) {
   return n.toExponential(4);
 }
 
+const VIBRATE_EVENTS = new Set(['moon', 'delist', 'pump100', 'rugpull']);
+
+function vibrateOnEvent(eventType) {
+  if (!VIBRATE_EVENTS.has(eventType) || !navigator.vibrate) return;
+
+  if (eventType === 'moon' || eventType === 'pump100') {
+    navigator.vibrate([80, 40, 80, 40, 160]);
+  } else {
+    navigator.vibrate([160, 80, 160]);
+  }
+}
+
+function tradeCompleteLabel(type, percent) {
+  const pct = Number(percent) || 0;
+  let amountLabel;
+
+  if (pct === 100) amountLabel = '전량';
+  else if (pct === 50) amountLabel = '절반';
+  else amountLabel = `${pct}%`;
+
+  return type === 'buy' ? `${amountLabel} 매수 완료!` : `${amountLabel} 매도 완료!`;
+}
+
 function showToast(message, type = 'success') {
   const toast = $('#toast');
   toast.textContent = message;
@@ -212,7 +235,7 @@ function connectSocket() {
     updatePortfolio();
 
     if (update.eventType !== 'normal') {
-      showEventBanner(update);
+      vibrateOnEvent(update.eventType);
     }
   });
 
@@ -221,10 +244,7 @@ function connectSocket() {
     updatePortfolio();
     renderShop();
 
-    const msg = result.type === 'buy'
-      ? `매수 완료! ${formatBXC(result.bxcGained)} (${formatKRW(result.spent)})`
-      : `매도 완료! ${formatBXC(result.bxcSold)} → ${formatKRW(result.gained)}`;
-    showToast(msg);
+    showToast(tradeCompleteLabel(result.type, result.percent));
   });
 
   socket.on('shop:success', ({ item, user }) => {
@@ -301,16 +321,6 @@ function updatePortfolio() {
     profitEl.textContent = '';
     profitEl.className = 'portfolio-profit';
   }
-}
-
-function showEventBanner(update) {
-  const banner = $('#event-banner');
-  const text = $('#event-text');
-  text.textContent = update.eventMessage;
-  banner.className = `event-banner visible ${update.eventType}`;
-
-  clearTimeout(banner._timer);
-  banner._timer = setTimeout(() => banner.classList.remove('visible'), 5000);
 }
 
 // ── Boksil thumb ──

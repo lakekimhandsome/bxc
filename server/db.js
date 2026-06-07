@@ -345,13 +345,16 @@ async function updateLastSeen(userId) {
   );
 }
 
+const CASH_RANKING_MIN = 10000000;
+
 async function getCashRankings(limit = 20) {
   const result = await pool.query(
     `select nickname, cash, bxc
     from users
+    where cash > $1
     order by cash desc
-    limit $1`,
-    [limit]
+    limit $2`,
+    [CASH_RANKING_MIN, limit]
   );
 
   return result.rows.map((row) => ({
@@ -505,7 +508,7 @@ async function executeTrade(userId, type, percent) {
       );
 
       await client.query('commit');
-      return { type: 'buy', spent: spendAmount, bxcGained: bxcAmount, price };
+      return { type: 'buy', spent: spendAmount, bxcGained: bxcAmount, price, percent };
     }
 
     if (type === 'sell') {
@@ -528,7 +531,7 @@ async function executeTrade(userId, type, percent) {
       );
 
       await client.query('commit');
-      return { type: 'sell', bxcSold: sellBxc, gained: gainAmount, price };
+      return { type: 'sell', bxcSold: sellBxc, gained: gainAmount, price, percent };
     }
 
     throw new Error('잘못된 거래 유형입니다.');
