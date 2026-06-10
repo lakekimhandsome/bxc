@@ -25,7 +25,7 @@ function formatKRW(amount) {
 }
 
 const KOREAN_UNITS = [
-  { name: '대수', digits: 72 },
+  { name: '구골', digits: 100 },
   { name: '무량대수', digits: 68 },
   { name: '불가사의', digits: 64 },
   { name: '나유타', digits: 60 },
