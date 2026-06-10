@@ -190,6 +190,15 @@ const STARTING_CASH = 10000000;
 const INITIAL_PRICE = 1000;
 const MIN_NICKNAME_LENGTH = 2;
 const MAX_NICKNAME_LENGTH = 12;
+const ALLOWED_TRADE_PERCENTS = [10, 25, 50, 100];
+
+function validateTradePercent(percent) {
+  const pct = Number(percent);
+  if (!Number.isFinite(pct) || !ALLOWED_TRADE_PERCENTS.includes(pct)) {
+    throw new Error('잘못된 거래 비율입니다.');
+  }
+  return pct;
+}
 
 function validateNickname(nickname) {
   const trimmed = nickname.trim();
@@ -466,6 +475,11 @@ async function getPriceHistory(limit = 100) {
 }
 
 async function executeTrade(userId, type, percent) {
+  if (type !== 'buy' && type !== 'sell') {
+    throw new Error('잘못된 거래 유형입니다.');
+  }
+
+  const validatedPercent = validateTradePercent(percent);
   const client = await pool.connect();
 
   try {
@@ -487,12 +501,12 @@ async function executeTrade(userId, type, percent) {
     const cash = Number(user.cash);
     const bxc = Number(user.bxc);
     const bxcCost = Number(user.bxc_cost);
-    const pct = percent / 100;
+    const pct = validatedPercent / 100;
 
     if (type === 'buy') {
       const spendAmount = cash * pct;
 
-      if (spendAmount <= 0) {
+      if (spendAmount <= 0 || spendAmount > cash) {
         throw new Error('매수할 현금이 없습니다.');
       }
 
@@ -508,13 +522,13 @@ async function executeTrade(userId, type, percent) {
       );
 
       await client.query('commit');
-      return { type: 'buy', spent: spendAmount, bxcGained: bxcAmount, price, percent };
+      return { type: 'buy', spent: spendAmount, bxcGained: bxcAmount, price, percent: validatedPercent };
     }
 
     if (type === 'sell') {
       const sellBxc = bxc * pct;
 
-      if (sellBxc <= 0) {
+      if (sellBxc <= 0 || sellBxc > bxc) {
         throw new Error('매도할 BXC가 없습니다.');
       }
 
@@ -531,10 +545,8 @@ async function executeTrade(userId, type, percent) {
       );
 
       await client.query('commit');
-      return { type: 'sell', bxcSold: sellBxc, gained: gainAmount, price, percent };
+      return { type: 'sell', bxcSold: sellBxc, gained: gainAmount, price, percent: validatedPercent };
     }
-
-    throw new Error('잘못된 거래 유형입니다.');
   } catch (err) {
     await client.query('rollback');
     throw err;

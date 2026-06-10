@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -11,6 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
   <!-- 로그인 화면 -->
   <div id="login-screen" class="screen active">
@@ -22,7 +24,8 @@
       </div>
       <div class="login-form">
         <input type="text" id="nickname-input" placeholder="닉네임 (2~12자)" maxlength="12" autocomplete="username">
-        <input type="password" id="password-input" placeholder="비밀번호 (4~32자)" maxlength="32" autocomplete="current-password">
+        <input type="password" id="password-input" placeholder="비밀번호 (4~32자)" maxlength="32"
+          autocomplete="current-password">
         <button id="login-btn" class="btn btn-primary">게임 시작</button>
         <p class="login-hint">신규 닉네임은 자동 가입 · 시작 자금 <strong>₩10,000,000</strong></p>
       </div>
@@ -32,6 +35,9 @@
 
   <!-- 메인 게임 화면 -->
   <div id="game-screen" class="screen">
+    <ins class="kakao_ad_area" style="display:none;" data-ad-unit="DAN-0SzgHJnvkb2sggXO" data-ad-width="320"
+      data-ad-height="100"></ins>
+    <script type="text/javascript" src="//t1.kakaocdn.net/kas/static/ba.min.js" async></script>
     <header class="header">
       <div class="header-row">
         <div class="header-left">
@@ -157,13 +163,17 @@
     <div id="event-banner" class="event-banner">
       <span id="event-text"></span>
     </div>
+    <ins class="kakao_ad_area" style="display:none;" data-ad-unit="DAN-HAmZY6d7681vVvdf" data-ad-width="320"
+      data-ad-height="100"></ins>
+    <script type="text/javascript" src="//t1.kakaocdn.net/kas/static/ba.min.js" async></script>
   </div>
 
   <!-- 토스트 알림 -->
   <div id="toast" class="toast hidden"></div>
 
   <!-- 복실이 상세 뷰어 -->
-  <div id="boksil-viewer" class="boksil-viewer hidden" role="dialog" aria-modal="true" aria-labelledby="boksil-viewer-title">
+  <div id="boksil-viewer" class="boksil-viewer hidden" role="dialog" aria-modal="true"
+    aria-labelledby="boksil-viewer-title">
     <div class="boksil-viewer-backdrop"></div>
     <div class="boksil-viewer-panel">
       <button id="boksil-viewer-close" class="boksil-viewer-close" type="button" aria-label="닫기">×</button>
@@ -182,4 +192,5 @@
   <script src="/js/chart.js"></script>
   <script src="/js/app.js"></script>
 </body>
+
 </html>
