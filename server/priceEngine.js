@@ -1,6 +1,8 @@
 const { getMarketState, updateMarketState } = require('./db');
 
-const MIN_PRICE = 1000;
+const MIN_PRICE = 1;
+const EQUILIBRIUM_PRICE = 100_000_000; // 1억 원
+const MEAN_REVERSION_STRENGTH = 0.003;
 const TICK_INTERVAL_MS = 1000;
 const RARE_EVENT_CHANCE = 0.001;
 
@@ -78,12 +80,18 @@ function clampPrice(price) {
   return Math.max(MIN_PRICE, Math.round(price));
 }
 
+function applyMeanReversion(price) {
+  const deviation = (EQUILIBRIUM_PRICE - price) / EQUILIBRIUM_PRICE;
+  return price * (1 + MEAN_REVERSION_STRENGTH * deviation);
+}
+
 async function tickPrice() {
   const market = await getMarketState();
   const previousPrice = Number(market.current_price);
   const event = pickRareEvent() || pickEvent();
   const rawPrice = event.apply(previousPrice);
-  const newPrice = clampPrice(rawPrice);
+  const revertedPrice = applyMeanReversion(rawPrice);
+  const newPrice = clampPrice(revertedPrice);
   const message = event.message();
 
   const result = await updateMarketState(newPrice, previousPrice, event.type, message);
@@ -130,6 +138,7 @@ async function getCurrentPriceInfo() {
 
 module.exports = {
   MIN_PRICE,
+  EQUILIBRIUM_PRICE,
   TICK_INTERVAL_MS,
   tickPrice,
   startPriceEngine,

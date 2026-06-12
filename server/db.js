@@ -203,7 +203,7 @@ function getBoksilImageUrl(itemId) {
 }
 
 const STARTING_CASH = 10000000;
-const INITIAL_PRICE = 1000;
+const INITIAL_PRICE = 100_000_000;
 const MIN_NICKNAME_LENGTH = 2;
 const MAX_NICKNAME_LENGTH = 12;
 const ALLOWED_TRADE_PERCENTS = [10, 25, 50, 100];
