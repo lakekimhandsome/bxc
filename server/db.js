@@ -236,8 +236,8 @@ function validateNickname(nickname) {
 async function initDb() {
   await pool.query(`
     create table if not exists chat_messages (
-      id uuid primary key default gen_random_uuid(),
-      user_id uuid not null references users(id) on delete cascade,
+      id text primary key default gen_random_uuid()::text,
+      user_id text not null references users(id) on delete cascade,
       nickname text not null,
       message text not null,
       created_at timestamptz not null default now()
