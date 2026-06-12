@@ -2,7 +2,7 @@ const { getMarketState, updateMarketState } = require('./db');
 
 const MIN_PRICE = 1;
 const EQUILIBRIUM_PRICE = 100_000_000; // 1억 원
-const MEAN_REVERSION_STRENGTH = 0.003;
+const MEAN_REVERSION_RATE = 0.06; // tick마다 1억까지 남은 log 거리의 6% 회귀
 const TICK_INTERVAL_MS = 1000;
 const RARE_EVENT_CHANCE = 0.001;
 
@@ -81,8 +81,18 @@ function clampPrice(price) {
 }
 
 function applyMeanReversion(price) {
-  const deviation = (EQUILIBRIUM_PRICE - price) / EQUILIBRIUM_PRICE;
-  return price * (1 + MEAN_REVERSION_STRENGTH * deviation);
+  const safe = Math.max(price, MIN_PRICE);
+  const logTarget = Math.log(EQUILIBRIUM_PRICE);
+  const logPrice = Math.log(safe);
+  const logNext = logPrice + (logTarget - logPrice) * MEAN_REVERSION_RATE;
+  let next = Math.exp(logNext);
+
+  // ₩1 바닥에서 반올림으로 회귀가 막히지 않도록 최소 상승 보장
+  if (Math.round(next) <= MIN_PRICE && EQUILIBRIUM_PRICE > MIN_PRICE) {
+    next = MIN_PRICE + 1;
+  }
+
+  return next;
 }
 
 async function tickPrice() {
