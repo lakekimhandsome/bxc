@@ -51,6 +51,7 @@
         <button class="nav-tab" data-tab="shop">상점</button>
         <button class="nav-tab" data-tab="collection">컬렉션</button>
         <button class="nav-tab" data-tab="ranking">랭킹</button>
+        <button class="nav-tab" data-tab="chat">채팅</button>
       </nav>
     </header>
 
@@ -157,6 +158,20 @@
           <p class="section-desc">컬렉션 완성도 기준 TOP 20</p>
           <div id="ranking-collection-list" class="ranking-list"></div>
         </div>
+      </section>
+
+      <!-- 채팅 탭 -->
+      <section id="tab-chat" class="tab-panel tab-chat">
+        <div class="chat-header">
+          <h2 class="section-title">실시간 채팅</h2>
+          <p class="section-desc">접속 중인 플레이어와 대시간으로 대니다</p>
+        </div>
+        <div id="chat-messages" class="chat-messages" aria-live="polite" role="log"></div>
+        <form id="chat-form" class="chat-form">
+          <input type="text" id="chat-input" class="chat-input" placeholder="메시지 입력 (Enter 전송)" maxlength="200"
+            autocomplete="off">
+          <button type="submit" class="btn btn-primary chat-send">전송</button>
+        </form>
       </section>
     </main>
 

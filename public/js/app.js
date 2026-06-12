@@ -10,6 +10,7 @@ let state = {
   rankings: { cash: [], collection: [] },
   shopItems: [],
   priceHistory: [],
+  chatMessages: [],
 };
 
 let chart = null;
@@ -160,6 +161,7 @@ function enterGame(data) {
   state.rankings = data.rankings;
   state.shopItems = data.shopItems;
   state.priceHistory = data.priceHistory;
+  state.chatMessages = data.chatMessages || [];
 
   $('#login-screen').classList.remove('active');
   $('#game-screen').classList.add('active');
@@ -171,6 +173,7 @@ function enterGame(data) {
   renderShop();
   renderCollection();
   renderRankings();
+  renderChat();
   connectSocket();
 }
 
@@ -188,6 +191,7 @@ function logout() {
     rankings: { cash: [], collection: [] },
     shopItems: [],
     priceHistory: [],
+    chatMessages: [],
   };
   chart = null;
 
@@ -218,11 +222,13 @@ function connectSocket() {
     state.rankings = data.rankings;
     state.priceHistory = data.priceHistory;
     state.shopItems = data.shopItems;
+    state.chatMessages = data.chatMessages || [];
     chart.setData(state.priceHistory);
     updateUI();
     renderShop();
     renderCollection();
     renderRankings();
+    renderChat();
   });
 
   socket.on('price:update', (update) => {
@@ -261,6 +267,13 @@ function connectSocket() {
   socket.on('rankings:update', ({ rankings }) => {
     state.rankings = rankings;
     renderRankings();
+  });
+
+  socket.on('chat:message', (message) => {
+    if (state.chatMessages.some((m) => m.id === message.id)) return;
+    state.chatMessages.push(message);
+    if (state.chatMessages.length > 100) state.chatMessages.shift();
+    appendChatMessage(message);
   });
 
   socket.on('error', ({ message }) => {
@@ -527,6 +540,84 @@ function initRankingTabs() {
   });
 }
 
+// ── Chat ──
+function formatChatTime(createdAt) {
+  const date = new Date(createdAt);
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+function appendChatMessage(message, scroll = true) {
+  const list = $('#chat-messages');
+  if (!list) return;
+
+  list.querySelector('.chat-empty')?.remove();
+
+  const isMine = state.user && message.userId === state.user.id;
+  const row = document.createElement('div');
+  row.className = `chat-message ${isMine ? 'mine' : 'other'}`;
+  row.dataset.messageId = message.id;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble';
+  bubble.textContent = message.text;
+
+  const meta = document.createElement('div');
+  meta.className = 'chat-meta';
+
+  if (!isMine) {
+    const name = document.createElement('span');
+    name.className = 'chat-nickname';
+    name.textContent = message.nickname;
+    meta.appendChild(name);
+  }
+
+  const time = document.createElement('span');
+  time.textContent = formatChatTime(message.createdAt);
+  meta.appendChild(time);
+
+  row.appendChild(bubble);
+  row.appendChild(meta);
+  list.appendChild(row);
+
+  if (scroll) {
+    list.scrollTop = list.scrollHeight;
+  }
+}
+
+function renderChat() {
+  const list = $('#chat-messages');
+  if (!list) return;
+
+  list.innerHTML = '';
+
+  if (!state.chatMessages.length) {
+    list.innerHTML = '<p class="chat-empty">아직 메시지가 없습니다. 첫 메시지를 남겨보세요!</p>';
+    return;
+  }
+
+  state.chatMessages.forEach((message) => appendChatMessage(message, false));
+  list.scrollTop = list.scrollHeight;
+}
+
+function initChat() {
+  const form = $('#chat-form');
+  const input = $('#chat-input');
+
+  form?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!socket) return;
+
+    const text = input.value.trim();
+    if (!text) return;
+
+    socket.emit('chat:send', { text });
+    input.value = '';
+    input.focus();
+  });
+}
+
 // ── Tabs ──
 function initTabs() {
   $$('.nav-tab').forEach((tab) => {
@@ -535,6 +626,13 @@ function initTabs() {
       $$('.tab-panel').forEach((p) => p.classList.remove('active'));
       tab.classList.add('active');
       $(`#tab-${tab.dataset.tab}`).classList.add('active');
+
+      if (tab.dataset.tab === 'chat') {
+        requestAnimationFrame(() => {
+          const list = $('#chat-messages');
+          if (list) list.scrollTop = list.scrollHeight;
+        });
+      }
     });
   });
 }
@@ -603,6 +701,7 @@ function init() {
   initRankingTabs();
   initBoksilViewer();
   initTrade();
+  initChat();
 }
 
 document.addEventListener('DOMContentLoaded', init);

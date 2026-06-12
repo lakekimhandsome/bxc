@@ -65,6 +65,14 @@ const SHOP_ITEMS = [
     description: '미니 자전거를 타고 집안을 질주한다. 브레이크는 장식품이다.',
   },
   {
+    id: 'avocado',
+    name: '아보카도 복실이',
+    emoji: '🥑',
+    price: '602214076000000000000000',
+    rarity: 'epic',
+    description: '아보가드로 상수만큼 비싼 슈퍼푸드. 건강에는 좋지만 지갑엔 치명적이다.',
+  },
+  {
     id: 'angry',
     name: '화난 복실이',
     emoji: '😾',
@@ -168,6 +176,14 @@ const SHOP_ITEMS = [
     rarity: 'mythic',
     description: '1000무량대수원짜리 근육의 정수. 벤치프레스 대신 주인님을 들어 올린다.',
   },
+  {
+    id: 'captain',
+    name: '대장 복실이',
+    emoji: '🎖️',
+    price: '10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+    rarity: 'mythic',
+    description: '1구골원짜리 복실이계의 최종 보스. 모든 복실이가 경례하는 유일한 대장.',
+  },
 ];
 
 const RARITY_LABELS = {
@@ -191,6 +207,9 @@ const INITIAL_PRICE = 1000;
 const MIN_NICKNAME_LENGTH = 2;
 const MAX_NICKNAME_LENGTH = 12;
 const ALLOWED_TRADE_PERCENTS = [10, 25, 50, 100];
+const MAX_CHAT_LENGTH = 200;
+const CHAT_HISTORY_LIMIT = 100;
+const CHAT_DB_LIMIT = 300;
 
 function validateTradePercent(percent) {
   const pct = Number(percent);
@@ -215,6 +234,21 @@ function validateNickname(nickname) {
 }
 
 async function initDb() {
+  await pool.query(`
+    create table if not exists chat_messages (
+      id uuid primary key default gen_random_uuid(),
+      user_id uuid not null references users(id) on delete cascade,
+      nickname text not null,
+      message text not null,
+      created_at timestamptz not null default now()
+    )
+  `);
+
+  await pool.query(`
+    create index if not exists chat_messages_created_at_idx
+    on chat_messages (created_at desc)
+  `);
+
   await pool.query(
     `insert into market
     (id, current_price, previous_price, last_event, last_event_message)
@@ -619,6 +653,73 @@ async function purchaseItem(userId, itemId) {
   }
 }
 
+function validateChatMessage(message) {
+  const trimmed = message.trim();
+
+  if (!trimmed) {
+    throw new Error('메시지를 입력해주세요.');
+  }
+
+  if (trimmed.length > MAX_CHAT_LENGTH) {
+    throw new Error(`메시지는 ${MAX_CHAT_LENGTH}자 이하여야 합니다.`);
+  }
+
+  return trimmed;
+}
+
+async function getRecentChatMessages() {
+  const result = await pool.query(
+    `select id, user_id, nickname, message, created_at
+    from chat_messages
+    order by created_at desc
+    limit $1`,
+    [CHAT_HISTORY_LIMIT]
+  );
+
+  return result.rows
+    .reverse()
+    .map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      nickname: row.nickname,
+      text: row.message,
+      createdAt: row.created_at,
+    }));
+}
+
+async function saveChatMessage(userId, nickname, message) {
+  const trimmed = validateChatMessage(message);
+
+  const result = await pool.query(
+    `insert into chat_messages (user_id, nickname, message)
+    values ($1, $2, $3)
+    returning id, user_id, nickname, message, created_at`,
+    [userId, nickname, trimmed]
+  );
+
+  await pool.query(
+    `with ranked as (
+      select id, row_number() over (order by created_at desc) as rn
+      from chat_messages
+    )
+    delete from chat_messages
+    where id in (
+      select id from ranked where rn > $1
+    )`,
+    [CHAT_DB_LIMIT]
+  );
+
+  const row = result.rows[0];
+
+  return {
+    id: row.id,
+    userId: row.user_id,
+    nickname: row.nickname,
+    text: row.message,
+    createdAt: row.created_at,
+  };
+}
+
 function getShopItems() {
   return SHOP_ITEMS.map((item) => ({
     ...item,
@@ -644,6 +745,9 @@ module.exports = {
   executeTrade,
   purchaseItem,
   getShopItems,
+  getRecentChatMessages,
+  saveChatMessage,
+  MAX_CHAT_LENGTH,
   SHOP_ITEMS,
   RARITY_LABELS,
   STARTING_CASH,

@@ -13,6 +13,8 @@ const {
   executeTrade,
   purchaseItem,
   getShopItems,
+  getRecentChatMessages,
+  saveChatMessage,
   STARTING_CASH,
 } = require('./db');
 
@@ -61,6 +63,7 @@ app.post('/api/login', async (req, res) => {
       rankings: await getRankings(),
       priceHistory: await getPriceHistory(),
       shopItems: getShopItems(),
+      chatMessages: await getRecentChatMessages(),
       startingCash: STARTING_CASH,
     });
   } catch (err) {
@@ -82,6 +85,8 @@ app.get('/api/shop', (_req, res) => {
 });
 
 const sessions = new Map();
+const chatCooldowns = new Map();
+const CHAT_COOLDOWN_MS = 1000;
 
 io.on('connection', (socket) => {
   socket.on('auth', async ({ userId }) => {
@@ -104,6 +109,7 @@ io.on('connection', (socket) => {
         rankings: await getRankings(),
         priceHistory: await getPriceHistory(),
         shopItems: getShopItems(),
+        chatMessages: await getRecentChatMessages(),
       });
     } catch (err) {
       socket.emit('error', { message: err.message });
@@ -157,6 +163,39 @@ io.on('connection', (socket) => {
       io.emit('rankings:update', {
         rankings: await getRankings(),
       });
+    } catch (err) {
+      socket.emit('error', { message: err.message });
+    }
+  });
+
+  socket.on('chat:send', async ({ text }) => {
+    const userId = sessions.get(socket.id);
+
+    if (!userId) {
+      socket.emit('error', { message: '로그인이 필요합니다.' });
+      return;
+    }
+
+    const now = Date.now();
+    const lastSent = chatCooldowns.get(userId) || 0;
+
+    if (now - lastSent < CHAT_COOLDOWN_MS) {
+      socket.emit('error', { message: '메시지를 너무 빠르게 보냈습니다.' });
+      return;
+    }
+
+    try {
+      const user = await getUserById(userId);
+
+      if (!user) {
+        socket.emit('error', { message: '인증 실패' });
+        return;
+      }
+
+      const message = await saveChatMessage(userId, user.nickname, text);
+      chatCooldowns.set(userId, now);
+
+      io.emit('chat:message', message);
     } catch (err) {
       socket.emit('error', { message: err.message });
     }
