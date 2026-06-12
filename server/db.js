@@ -70,7 +70,7 @@ const SHOP_ITEMS = [
     emoji: '🥑',
     price: '602214076000000000000000',
     rarity: 'epic',
-    description: '아보가드로 상수만큼 비싼 슈퍼푸드. 건강에는 좋지만 지갑엔 치명적이다.',
+    description: '아보가드로 수만큼 비싼 슈퍼푸드. 건강에는 좋지만 지갑엔 치명적이다.',
   },
   {
     id: 'angry',
