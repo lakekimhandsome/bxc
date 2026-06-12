@@ -46,6 +46,23 @@ body {
   flex-direction: column;
 }
 
+/* ── Kakao AdFit ── */
+.ad-slot {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  min-height: 100px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.ad-slot-bottom {
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+}
+
 /* ── Login ── */
 .login-container {
   flex: 1;

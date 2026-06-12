@@ -174,7 +174,53 @@ function enterGame(data) {
   renderCollection();
   renderRankings();
   renderChat();
+  initKakaoAds();
   connectSocket();
+}
+
+let adfitScriptPromise = null;
+
+function loadAdfitScript() {
+  if (window.adfit) return Promise.resolve();
+
+  if (adfitScriptPromise) return adfitScriptPromise;
+
+  adfitScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://t1.kakaocdn.net/kas/static/ba.min.js';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      adfitScriptPromise = null;
+      reject(new Error('AdFit script load failed'));
+    };
+    document.body.appendChild(script);
+  });
+
+  return adfitScriptPromise;
+}
+
+function mountKakaoAdSlot(slotEl) {
+  if (!slotEl || slotEl.dataset.adMounted === 'true') return;
+
+  const ins = document.createElement('ins');
+  ins.className = 'kakao_ad_area';
+  ins.style.display = 'none';
+  ins.setAttribute('data-ad-unit', slotEl.dataset.adUnit);
+  ins.setAttribute('data-ad-width', slotEl.dataset.adWidth);
+  ins.setAttribute('data-ad-height', slotEl.dataset.adHeight);
+  slotEl.appendChild(ins);
+  slotEl.dataset.adMounted = 'true';
+}
+
+function initKakaoAds() {
+  $$('#game-screen .ad-slot').forEach(mountKakaoAdSlot);
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      loadAdfitScript().catch(() => {});
+    });
+  });
 }
 
 function logout() {
